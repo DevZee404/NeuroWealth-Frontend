@@ -120,7 +120,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Command Palette"
-        className="relative w-full max-w-full overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in-95 duration-200 sm:max-w-[640px] sm:rounded-xl"
+        className="relative w-full max-w-full overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none motion-reduce:duration-0 motion-reduce:transform-none sm:max-w-[640px] sm:rounded-xl"
       >
         <div className="flex min-h-[56px] items-center border-b border-slate-800 px-4">
           <Search className="mr-3 h-5 w-5 shrink-0 text-slate-400" />
@@ -160,7 +160,7 @@ export function CommandPalette() {
                 role="option"
                 aria-selected={isSelected}
                 className={cn(
-                  "flex min-h-[44px] cursor-pointer items-center rounded-md px-4 py-2 text-sm transition-colors",
+                  "flex min-h-[44px] cursor-pointer items-center rounded-md px-4 py-2 text-sm transition-colors motion-reduce:transition-none",
                   isSelected
                     ? "bg-slate-800 text-sky-400"
                     : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200",
