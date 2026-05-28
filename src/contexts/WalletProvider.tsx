@@ -12,6 +12,16 @@ import {
 } from '@stellar/stellar-sdk';
 import { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
 import { kit } from '../lib/stellar-wallet-kit';
+import {
+  clearPersistedWalletState,
+  persistWalletState,
+  readPersistedWalletState,
+} from '@/lib/wallet-persistence';
+import {
+  detectWalletNetworkMismatch,
+  type WalletNetworkStatus,
+} from '@/lib/wallet-network-detection';
+import { formatConfiguredNetworkLabel } from '@/lib/stellar-network';
 
 const Server = Horizon.Server;
 
@@ -35,6 +45,8 @@ interface WalletContextState {
   isRestoring: boolean;
   publicKey?: string;
   walletName?: string;
+  walletProviderId?: string;
+  networkStatus: WalletNetworkStatus;
   balances: Balance[];
   connect: () => Promise<void>;
   disconnect: () => void;
@@ -64,8 +76,19 @@ export function WalletProvider({
   const [isRestoring, setIsRestoring] = useState(true);
   const [publicKey, setPublicKey] = useState<string>();
   const [walletName, setWalletName] = useState<string>();
+  const [walletProviderId, setWalletProviderId] = useState<string>();
+  const [networkStatus, setNetworkStatus] = useState<WalletNetworkStatus>(() => ({
+    hasMismatch: false,
+    appNetworkLabel: formatConfiguredNetworkLabel(),
+  }));
   const [balances, setBalances] = useState<Balance[]>([]);
   const [server] = useState(() => new Server(horizonUrl));
+
+  const refreshNetworkStatus = useCallback(async (providerId?: string) => {
+    const status = await detectWalletNetworkMismatch(providerId);
+    setNetworkStatus(status);
+    return status;
+  }, []);
 
   const connect = useCallback(async () => {
     try {
@@ -81,14 +104,17 @@ export function WalletProvider({
 
           setPublicKey(address);
           setWalletName(name);
+          setWalletProviderId(option.id);
           setConnected(true);
+          await refreshNetworkStatus(option.id);
 
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('stellar_wallet_connected', 'true');
-            localStorage.setItem('stellar_wallet_id', option.id);
-            localStorage.setItem('stellar_wallet_address', address);
-            localStorage.setItem('stellar_wallet_name', name);
-          }
+          persistWalletState({
+            connected: true,
+            providerId: option.id,
+            publicKey: address,
+            displayName: name,
+            networkPassphrase: network,
+          });
 
           try {
             const account = await server.accounts().accountId(address).call();
@@ -108,7 +134,7 @@ export function WalletProvider({
       console.error('Failed to connect wallet:', error);
       throw error;
     }
-  }, [server]);
+  }, [server, network, refreshNetworkStatus]);
 
   const disconnect = useCallback(async () => {
     try {
@@ -116,18 +142,15 @@ export function WalletProvider({
       setConnected(false);
       setPublicKey(undefined);
       setWalletName(undefined);
+      setWalletProviderId(undefined);
       setBalances([]);
+      await refreshNetworkStatus();
 
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('stellar_wallet_connected');
-        localStorage.removeItem('stellar_wallet_id');
-        localStorage.removeItem('stellar_wallet_address');
-        localStorage.removeItem('stellar_wallet_name');
-      }
+      clearPersistedWalletState();
     } catch (error) {
       console.error('Failed to disconnect wallet:', error);
     }
-  }, []);
+  }, [refreshNetworkStatus]);
 
   const refreshBalances = useCallback(async () => {
     if (!publicKey) return;
@@ -203,21 +226,25 @@ export function WalletProvider({
     const autoReconnect = async () => {
       if (typeof window === 'undefined') return;
 
-      const wasConnected = localStorage.getItem('stellar_wallet_connected');
-      const savedWalletId = localStorage.getItem('stellar_wallet_id');
-      const savedAddress = localStorage.getItem('stellar_wallet_address');
-      const savedName = localStorage.getItem('stellar_wallet_name');
+      const saved = readPersistedWalletState();
 
-      if (wasConnected === 'true' && savedWalletId && savedAddress) {
+      if (saved) {
         try {
           const currentKit = kit();
-          currentKit.setWallet(savedWalletId);
+          currentKit.setWallet(saved.providerId);
           const { address } = await currentKit.getAddress();
 
-          if (address === savedAddress) {
+          if (address === saved.publicKey) {
             setPublicKey(address);
-            setWalletName(savedName || 'Unknown');
+            setWalletName(saved.displayName);
+            setWalletProviderId(saved.providerId);
             setConnected(true);
+            await refreshNetworkStatus(saved.providerId);
+
+            persistWalletState({
+              ...saved,
+              networkPassphrase: network,
+            });
 
             try {
               const account = await server.accounts().accountId(address).call();
@@ -233,12 +260,7 @@ export function WalletProvider({
           }
         } catch {
           console.log('Auto-reconnect failed');
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('stellar_wallet_connected');
-            localStorage.removeItem('stellar_wallet_id');
-            localStorage.removeItem('stellar_wallet_address');
-            localStorage.removeItem('stellar_wallet_name');
-          }
+          clearPersistedWalletState();
         }
       }
 
@@ -246,13 +268,20 @@ export function WalletProvider({
     };
 
     autoReconnect();
-  }, [server]);
+  }, [server, network, refreshNetworkStatus]);
+
+  useEffect(() => {
+    if (!connected || !walletProviderId) return;
+    void refreshNetworkStatus(walletProviderId);
+  }, [connected, walletProviderId, refreshNetworkStatus]);
 
   const walletValue: WalletContextState = {
     connected,
     isRestoring,
     publicKey,
     walletName,
+    walletProviderId,
+    networkStatus,
     balances,
     connect,
     disconnect,
