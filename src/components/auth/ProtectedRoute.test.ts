@@ -150,6 +150,10 @@ test("ProtectedRoute — isProtectedPath: /signup is public", () => {
   assert.equal(isProtectedPath("/signup"), false);
 });
 
+test("ProtectedRoute — isProtectedPath: /signin is public", () => {
+  assert.equal(isProtectedPath("/signin"), false);
+});
+
 test("ProtectedRoute — isProtectedPath: / (root) is public", () => {
   assert.equal(isProtectedPath("/"), false);
 });
