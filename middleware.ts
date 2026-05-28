@@ -52,6 +52,8 @@ export const config = {
     "/profile/:path*",
     "/settings",
     "/settings/:path*",
+    "/onboarding",
+    "/onboarding/:path*",
     "/login",
     "/signup",
     "/signin",
