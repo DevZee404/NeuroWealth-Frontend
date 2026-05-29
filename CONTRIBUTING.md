@@ -1,5 +1,18 @@
 # Contributing
 
+## Package manager
+
+This repo uses **Yarn 1** (`yarn.lock` is canonical). Enable Corepack or install
+Yarn 1.22.x, then:
+
+```bash
+yarn install
+yarn lint
+yarn typecheck
+```
+
+Do not commit `package-lock.json` or `npm-shrinkwrap.json`.
+
 ## Hook imports (auth + wallet)
 
 Use the `@/contexts` barrel as the single public surface for auth and wallet hooks/providers.
